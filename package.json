@@ -1,0 +1,32 @@
+{
+  "name": "sim-mod-comm",
+  "version": "1.0.0",
+  "description": "Provides nice communication helper for simple iterative modular simulation over webSockets with broker pattern",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zworek/sim-mod-comm.git"
+  },
+  "keywords": [
+    "websocket",
+    "simulation",
+    "modular simulation",
+    "broker"
+  ],
+  "author": "Tomasz Zwornicki",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zworek/sim-mod-comm/issues"
+  },
+  "homepage": "https://github.com/zworek/sim-mod-comm#readme",
+  "dependencies": {
+    "axios": "^0.19.2",
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "uuid": "^3.4.0",
+    "ws": "^7.2.1"
+  }
+}
