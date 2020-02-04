@@ -3,7 +3,7 @@ const WebSocket = require('ws');
 const { WsHelper } = require('./WsHelper');
 
 const runSimpleModule = (moduleConf) => {
-    app.set('port', process.env.PORT || moduleConf.port || 7331);
+    app.set('port', moduleConf.port);
     app.use(require('body-parser').json());
 
     const okResponse = {
@@ -12,7 +12,7 @@ const runSimpleModule = (moduleConf) => {
     };
 
     app.get('/', (req, res) => {
-        console.log(`${moduleConf.name}: Smb checked my index`);
+        console.log(`${moduleConf.name}: Somebody checked my index`);
         res.send(`${moduleConf.name} says hello`);
     });
     app.post('/invitation', async (req, res) => {

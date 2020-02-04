@@ -4,6 +4,10 @@ const uuid = require('uuid/v4');
 const { WsHelper } = require("./WsHelper");
 const { EventBus } = require("./EventBus");
 
+// TODO: Validate modules dependencies
+//        Check for cycles, and decide what to do with them.. maybe they are ok?
+//        Check that all dependencies are fulfilled
+
 class SimulationServer {
     constructor({ wss, moduleConfigs, realmConfig, webSocketUrl, timeOutInMs = 35 * 1000 }) {
         this.wss = wss;
