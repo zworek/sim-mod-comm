@@ -4,29 +4,66 @@ const uuid = require('uuid/v4');
 const { WsHelper } = require("./WsHelper");
 const { EventBus } = require("./EventBus");
 
-// TODO: Validate modules dependencies
-//        Check for cycles, and decide what to do with them.. maybe they are ok?
-//        Check that all dependencies are fulfilled
-
 class SimulationServer {
-    constructor({ wss, moduleConfigs, realmConfig, webSocketUrl, timeOutInMs = 35 * 1000 }) {
+    constructor({ wss, moduleConfigs, realmConfig, webSocketUrl, serverProducedMessages, timeOutInMs = 35 * 1000 }) {
         this.wss = wss;
         this.moduleConfigs = moduleConfigs;
         this.realmConfig = realmConfig;
         this.webSocketUrl = webSocketUrl;
         this.timeOutInMs = timeOutInMs;
+        this.serverProducedMessages = serverProducedMessages;
 
         this.eventBus = new EventBus();
     }
 
+    validateModulesMessages(modulesMessages) {
+        // validate name uniqueness
+        let uniqueMessages = [];
+        for (let serverMsg of this.serverProducedMessages) {
+            if (uniqueMessages.find(({ name }) => name === serverMsg)) {
+                throw new Error("serverProducedMessaegs shouldn't contain duplicates!");
+            } else {
+                uniqueMessages.push({ name: serverMsg, requires: [] });
+            }
+        }
+        for (let msg of modulesMessages) {
+            if (uniqueMessages.find(({ name }) => name === msg.name)) {
+                throw new Error(`Modules try to spawn ${msg.name} twice!`);
+            } else {
+                uniqueMessages.push({ name: msg.name, requires: [...msg.predecessors] });
+            }
+        }
+
+        // validate cousality
+        while (uniqueMessages.length > 0) {
+            const fullfilledMsg = uniqueMessages.find(msg => msg.requires.length === 0);
+            if (!fullfilledMsg) {
+                throw new Error(
+                    `Couldn't resolve predecessors of those messages\n` +
+                    JSON.stringify(uniqueMessages)
+                );
+            }
+
+            // remove fulfilled msg from array
+            uniqueMessages = uniqueMessages.filter(msg => msg !== fullfilledMsg);
+
+            // resolve requirements of other msgs that required this one
+            uniqueMessages.forEach(msg => {
+                msg.requires = msg.requires.filter(req => req != fullfilledMsg.name);
+            });
+        }
+
+        console.log("\nSuccesfully validated modules messages\n");
+    };
+
     async connectModules() {
         this.connections = await this._inviteAndGetWsConnections();
+
+        this.validateModulesMessages([].concat(...this.connections.map(({ response }) => response.messages)));
 
         const toBeReadyList = [];
 
         this.wshs = this.connections.map(({ ws, response }) => {
-            console.log("Got websocket and response", response);
-
             const wsHelper = new WsHelper(ws);
 
             const allPredecessors = [...new Set(
@@ -67,7 +104,6 @@ class SimulationServer {
             if (actInvitation) {
                 actInvitation.resolve(ws);
 
-                console.log(`inviter accepting ${actInvitation.name} (${currentId})`)
                 pendingInvitations.delete(currentId);
             } else {
                 ws.send(`Currently not invited ${currentId}`);
@@ -92,6 +128,10 @@ class SimulationServer {
             return httpResponse
                 .then(async httpResponse => {
                     const ws = await webSocketConnection;
+                    console.log(
+                        `\nWS-connection established with ${mod.name}, http response:\n`,
+                        httpResponse.data
+                    );
                     return { response: httpResponse.data, ws };
                 })
                 .catch(err => {

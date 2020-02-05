@@ -1,6 +1,6 @@
 {
   "name": "sim-mod-comm",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Provides nice communication helper for simple iterative modular simulation over webSockets with broker pattern",
   "main": "index.js",
   "scripts": {
