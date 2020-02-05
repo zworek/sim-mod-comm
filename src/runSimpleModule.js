@@ -15,7 +15,7 @@ const runSimpleModule = (moduleConf) => {
         console.log(`${moduleConf.name}: Somebody checked my index`);
         res.send(`${moduleConf.name} says hello`);
     });
-    app.post('/invitation', async (req, res) => {
+    app.post('/invitation', (req, res) => {
         console.log(`${moduleConf.name}: Got some invitation`, req.body.webSocketUrl);
 
         const ws = new WebSocket(req.body.webSocketUrl);
@@ -23,19 +23,22 @@ const runSimpleModule = (moduleConf) => {
 
         wsHelper.subscribe('init', async () => {
             console.log(`${moduleConf.name}: Got init`);
-            await Promise.all(moduleConf.messages.map(async msg => {
-                msg.preparedFun = await msg.fun(req.body.realmConf);
-            }));
+            const preparedFuns = await Promise.all(
+                moduleConf.messages.map(msg => msg.fun(req.body.realmConf))
+            );
             await wsHelper.send('ready');
 
             while (true) {
-                await Promise.all(moduleConf.messages.map(async msg => {
-                    const params = await Promise.all(msg.predecessors.map(type => wsHelper.receive(type)));
-                    wsHelper.send(msg.name, await msg.preparedFun(params));
-                }));
+                await Promise.all(
+                    moduleConf.messages.map(async (msg, i) => {
+                        const params = await Promise.all(
+                            msg.predecessors.map(type => wsHelper.receive(type))
+                        );
+                        wsHelper.send(msg.name, await preparedFuns[i](params));
+                    })
+                );
             }
         });
-
         res.send(okResponse);
     });
 
