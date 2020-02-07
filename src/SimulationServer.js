@@ -135,7 +135,7 @@ class SimulationServer {
                     return { response: httpResponse.data, ws };
                 })
                 .catch(err => {
-                    new Error(`Module ${name} denied invitation: ${err.message}`);
+                    throw new Error(`Module ${name} denied invitation: ${err.message}: ${err.response.data}`);
                 });
         }));
     }
