@@ -4,6 +4,20 @@ const { WsHelper } = require('./WsHelper');
 
 let clientNumber = 0;
 
+const makeAwaitableFlag = () => {
+    let resolve;
+    const flag = new Promise((res, _) => {
+        resolve = res;
+    });
+    flag.resolve = resolve;
+
+    flag.resolved = false;
+    flag.finally(() => {
+        flag.resolved = true;
+    });
+    return flag;
+};
+
 const runSimpleModule = (moduleConf) => {
     app.set('port', moduleConf.port);
     app.use(require('body-parser').json());
@@ -25,41 +39,50 @@ const runSimpleModule = (moduleConf) => {
         const actClient = clientNumber++;
 
         console.log(`${actClient} - ${moduleConf.name}: Got some invitation`, req.body.webSocketUrl);
+
+        let wsHelper;
+        const webSocketConnectionEnded = makeAwaitableFlag();
         try {
             const ws = new WebSocket(req.body.webSocketUrl);
-            const wsHelper = new WsHelper(ws);
+            wsHelper = new WsHelper(ws);
 
-            let runSmoothly = true;
-            ws.on("error", (err) => {
-                console.log(`${actClient} - ${err.message}`);
-                runSmoothly = false;
+            ws.on('close', (...reason) => {
+                console.log(`${actClient} - end ${reason}`);
+                webSocketConnectionEnded.resolve();
             });
 
             await moduleConf.validate(req);
-
-            wsHelper.subscribe('init', async () => {
-                console.log(`${actClient} - ${moduleConf.name}: Got init`);
-                const preparedFuns = await Promise.all(
-                    moduleConf.messages.map(msg => msg.fun(req.body.realmConf))
-                );
-                await wsHelper.send('ready');
-
-                while (runSmoothly) {
-                    await Promise.all(
-                        moduleConf.messages.map(async (msg, i) => {
-                            const params = await Promise.all(
-                                msg.predecessors.map(type => wsHelper.receive(type))
-                            );
-                            wsHelper.send(msg.name, await preparedFuns[i](params));
-                        })
-                    );
-                }
-            });
+            const promiseMeInit = wsHelper.receive('init');
             res.send(okResponse);
+
+            await promiseMeInit;
         } catch (err) {
             console.log(`${actClient} - returning http err ${err.message}`)
             res.status(500).send(err.message);
+            return;
         }
+
+        console.log(`${actClient} - ${moduleConf.name}: Got init`);
+
+        const preparedFuns = await Promise.all(
+            moduleConf.messages.map(msg => msg.fun(req.body.realmConf))
+        );
+        await wsHelper.send('ready');
+
+        while (!webSocketConnectionEnded.resolved) {
+            await Promise.race([
+                webSocketConnectionEnded,
+                Promise.all(
+                    moduleConf.messages.map(async (msg, i) => {
+                        const params = await Promise.all(
+                            msg.predecessors.map(type => wsHelper.receive(type))
+                        );
+                        wsHelper.send(msg.name, await preparedFuns[i](params));
+                    })
+                )
+            ]);
+        }
+        console.log(`${actClient} - iteration loop ended`);
     });
 
     const http = require('http').Server(app);
