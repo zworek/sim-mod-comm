@@ -128,6 +128,11 @@ class SimulationServer {
             return httpResponse
                 .then(async httpResponse => {
                     const ws = await webSocketConnection;
+
+                    ws.on("close", () => {
+                        throw new Error(`Module ${mod.name} disconnected WebSocket`);
+                    });
+
                     console.log(
                         `\nWS-connection established with ${mod.name}, http response:\n`,
                         httpResponse.data
