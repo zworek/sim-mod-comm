@@ -22,8 +22,8 @@ const runSimpleModule = (moduleConf) => {
     app.set('port', moduleConf.port);
     app.use(require('body-parser').json());
 
-    if(!moduleConf.validate) {
-        moduleConf.validate = () => {};
+    if (!moduleConf.validate) {
+        moduleConf.validate = () => { };
     }
 
     const okResponse = {
@@ -42,6 +42,10 @@ const runSimpleModule = (moduleConf) => {
 
         let wsHelper;
         const webSocketConnectionEnded = makeAwaitableFlag();
+
+        const getMessagePredecessors = async msg =>
+            await Promise.all(msg.predecessors.map(type => wsHelper.receive(type)));
+
         try {
             const ws = new WebSocket(req.body.webSocketUrl);
             wsHelper = new WsHelper(ws);
@@ -67,16 +71,18 @@ const runSimpleModule = (moduleConf) => {
         const preparedFuns = await Promise.all(
             moduleConf.messages.map(msg => msg.fun(req.body.realmConf))
         );
+
+        const currMsgPreds = moduleConf.messages.map(getMessagePredecessors);
         await wsHelper.send('ready');
 
         while (!webSocketConnectionEnded.resolved) {
             await Promise.race([
                 webSocketConnectionEnded,
                 Promise.all(
-                    moduleConf.messages.map(async (msg, i) => {
-                        const params = await Promise.all(
-                            msg.predecessors.map(type => wsHelper.receive(type))
-                        );
+                    currMsgPreds.map(async (messagePredecessors, i) => {
+                        const msg = moduleConf.messages[i];
+                        const params = await messagePredecessors;
+                        currMsgPreds[i] = getMessagePredecessors(msg);
                         wsHelper.send(msg.name, await preparedFuns[i](params));
                     })
                 )
